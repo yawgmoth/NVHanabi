@@ -3,7 +3,8 @@ import sys
 import copy
 import time
 from beliefs import *
-
+from actions import *
+import argparse
 
 
 
@@ -25,32 +26,7 @@ def make_deck():
                 deck.append((col, num+1))
     random.shuffle(deck)
     return deck
-    
 
-    
-HINT_COLOR = 0
-HINT_NUMBER = 1
-PLAY = 2
-DISCARD = 3
-    
-class Action(object):
-    def __init__(self, type, pnr=None, col=None, num=None, cnr=None):
-        self.type = type
-        self.pnr = pnr
-        self.col = col
-        self.num = num
-        self.cnr = cnr
-    def __str__(self):
-        if self.type == HINT_COLOR:
-            return "hints " + str(self.pnr) + " about all their " + COLORNAMES[self.col] + " cards"
-        if self.type == HINT_NUMBER:
-            return "hints " + str(self.pnr) + " about all their " + str(self.num)
-        if self.type == PLAY:
-            return "plays their " + str(self.cnr)
-        if self.type == DISCARD:
-            return "discards their " + str(self.cnr)
-    def __eq__(self, other):
-        return (self.type, self.pnr, self.col, self.num, self.cnr) == (other.type, other.pnr, other.col, other.num, other.cnr)
         
 class Player(object):
     def __init__(self, name, pnr):
@@ -81,7 +57,7 @@ def format_intention(i):
 def whattodo(knowledge, pointed, board):
     possible = get_possible(knowledge)
     play = potentially_playable(possible, board)
-    discard = potentially_discardable(possible, board)
+    discard = potentially_useless(possible, board)
     
     if play and pointed:
         return PLAY
@@ -149,7 +125,7 @@ def pretend(action, knowledge, intentions, hand, board):
         return False, score, predictions
     return True,score, predictions
     
-HINT_VALUE = 0.5
+
     
 def pretend_discard(act, knowledge, board, trash):
     which = copy.deepcopy(knowledge[act.cnr])
@@ -323,6 +299,146 @@ class SelfIntentionalPlayer(Player):
         elif action.pnr == self.pnr:
             self.gothint = (action,player)
             self.last_knowledge = game.knowledge[:]
+            self.last_board = game.board[:]
+            self.last_trash = game.trash[:]
+            self.played = game.played[:]
+            
+class ProbablyIntentionalPlayer(Player):
+    def __init__(self, name, pnr):
+        self.name = name
+        self.hints = {}
+        self.pnr = pnr
+        self.gothint = None
+        self.last_knowledge = []
+        self.last_played = []
+        self.last_board = []
+        self.explanation = []
+    def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints):
+        if not self.last_knowledge:
+            self.last_knowledge = [initial_knowledge(len(knowledge[nr])) for i in knowledge]
+        probs = probabilities(knowledge[nr], played, trash, hands[1-nr])
+        
+        handsize = len(knowledge[0])
+        
+        possible = []
+        result = None
+        self.explanation = []
+        self.explanation.append(["Your Hand:"] + map(f, hands[1-nr]))
+        action = []
+        iact = None
+        if self.gothint:
+            (act,plr) = self.gothint
+            (iact,force) = interpret_hint(self.last_knowledge[nr], knowledge[nr], played, trash, hands[1-nr], act, board)
+            if force: 
+                return iact
+
+
+        if action:
+            self.explanation.append(["What you want me to do"] + map(format_intention, action))
+            for i,a in enumerate(action):
+                if a == PLAY and (not result or result.type == DISCARD):
+                    result = Action(PLAY, cnr=i)
+                elif a == DISCARD and not result:
+                    result = Action(DISCARD, cnr=i)
+
+        self.gothint = None
+        for k in knowledge[nr]:
+            possible.append(get_possible(k))
+        
+        discards = []
+        duplicates = []
+        for i,p in enumerate(possible):
+            if playable(p,board) and not result:
+                result = Action(PLAY, cnr=i)
+            if discardable(p,board):
+                discards.append(i)
+
+        if discards and hints < 8 and not result:
+            result =  Action(DISCARD, cnr=random.choice(discards))
+            
+        playables = []
+        useless = []
+        discardables = []
+        othercards = trash + board
+        intentions = [None for i in xrange(handsize)]
+        for i,h in enumerate(hands):
+            if i != nr:
+                for j,(col,n) in enumerate(h):
+                    if board[col][1] + 1 == n:
+                        playables.append((i,j))
+                        intentions[j] = PLAY
+                    if board[col][1] >= n:
+                        useless.append((i,j))
+                        if not intentions[j]:
+                            intentions[j] = DISCARD
+                    if n < 5 and (col,n) not in othercards:
+                        discardables.append((i,j))
+                        if not intentions[j]:
+                            intentions[j] = CANDISCARD
+        
+        self.explanation.append(["Intentions"] + map(format_intention, intentions))
+        
+        
+            
+        if hints > 0:
+            valid = []
+            for c in ALL_COLORS:
+                action = (HINT_COLOR, c)
+                #print "HINT", COLORNAMES[c],
+                (isvalid,score,expl) = pretend(action, knowledge[1-nr], intentions, hands[1-nr], board)
+                self.explanation.append(["Prediction for: Hint Color " + COLORNAMES[c]] + map(format_intention, expl))
+                #print isvalid, score
+                if isvalid:
+                    valid.append((action,score))
+            
+            for r in xrange(5):
+                r += 1
+                action = (HINT_NUMBER, r)
+                #print "HINT", r,
+                
+                (isvalid,score, expl) = pretend(action, knowledge[1-nr], intentions, hands[1-nr], board)
+                self.explanation.append(["Prediction for: Hint Rank " + str(r)] + map(format_intention, expl))
+                #print isvalid, score
+                if isvalid:
+                    valid.append((action,score))
+                 
+            if valid and not result:
+                valid.sort(key=lambda (a,s): -s)
+                #print valid
+                (a,s) = valid[0]
+                if a[0] == HINT_COLOR:
+                    result = Action(HINT_COLOR, pnr=1-nr, col=a[1])
+                else:
+                    result = Action(HINT_NUMBER, pnr=1-nr, num=a[1])
+
+        self.explanation.append(["My Knowledge"] + map(format_knowledge, knowledge[nr]))
+        possible = [ Action(DISCARD, cnr=i) for i in xrange(handsize) ]
+        
+        scores = map(lambda p: pretend_discard(p, knowledge[nr], board, trash), possible)
+        def format_term((col,rank,n,prob,val)):
+            return COLORNAMES[col] + " " + str(rank) + " (%.2f%%): %.2f"%(prob*100, val)
+            
+        self.explanation.append(["Discard Scores"] + map(lambda (a,s,t): "\n".join(map(format_term, t)) + "\n%.2f"%(s), scores))
+        scores.sort(key=lambda (a,s,t): -s)
+        self.last_knowledge = copy.deepcopy(knowledge)
+        if result:
+            return result
+        if iact:
+            return iact
+        return scores[0][0]
+        
+        return random.choice([Action(DISCARD, cnr=i) for i in xrange(handsize)])
+    def inform(self, action, player, game):
+        if action.type in [PLAY, DISCARD]:
+            x = str(action)
+            if (action.cnr,player) in self.hints:
+                self.hints[(action.cnr,player)] = []
+            for i in xrange(10):
+                if (action.cnr+i+1,player) in self.hints:
+                    self.hints[(action.cnr+i,player)] = self.hints[(action.cnr+i+1,player)]
+                    self.hints[(action.cnr+i+1,player)] = []
+        elif action.pnr == self.pnr:
+            self.gothint = (action,player)
             self.last_board = game.board[:]
             self.last_trash = game.trash[:]
             self.played = game.played[:]
@@ -506,7 +622,7 @@ class NullStream(object):
         
 random.seed(123)
 
-playertypes = {"random": Player, "full": SelfIntentionalPlayer}
+playertypes = {"random": Player, "full": SelfIntentionalPlayer, "prob": ProbablyIntentionalPlayer}
 names = ["Shangdi", "Yu Di", "Tian", "Nu Wa", "Pangu"]
         
         
@@ -526,7 +642,7 @@ def make_player(player, i):
         return SamplingRecognitionPlayer(names[i], i, playertypes[other])
     return None 
     
-def main(args):
+def main(args, n=10000):
     if not args:
         args = ["random"]*3
     if args[0] == "trial":
@@ -563,7 +679,6 @@ def main(args):
     for i,a in enumerate(args):
         players.append(make_player(a, i))
         
-    n = 10000
     out = NullStream()
     if n < 3:
         out = sys.stdout
@@ -589,4 +704,13 @@ def main(args):
     
     
 if __name__ == "__main__":
-    main(sys.argv[1:])
+
+    parser = argparse.ArgumentParser(description='An implementation of Hanabi.')
+    parser.add_argument('players', metavar='P', type=str, nargs='*',
+                        help='')
+    parser.add_argument('--count', "-n", dest='n', action='store',
+                        default=10000, type=int,
+                        help='How many games to play (default: 10000)')
+
+    args = parser.parse_args()
+    main(args.players, args.n)
