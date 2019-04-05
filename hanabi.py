@@ -328,6 +328,7 @@ class ProbablyIntentionalPlayer(Player):
         iact = None
         if self.gothint:
             (act,plr) = self.gothint
+            self.gothint = None
             (iact,force) = interpret_hint(self.last_knowledge[nr], knowledge[nr], played, trash, hands[1-nr], act, board)
             if force: 
                 return iact
@@ -341,7 +342,6 @@ class ProbablyIntentionalPlayer(Player):
                 elif a == DISCARD and not result:
                     result = Action(DISCARD, cnr=i)
 
-        self.gothint = None
         for k in knowledge[nr]:
             possible.append(get_possible(k))
         

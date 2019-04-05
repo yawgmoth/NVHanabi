@@ -489,7 +489,7 @@ def format_score(sc):
     
                 
 # AIClasses
-ais = {"random": hanabi.Player, "inner": hanabi.InnerStatePlayer, "outer": hanabi.OuterStatePlayer, "self": hanabi.SelfRecognitionPlayer, "intentional": hanabi.IntentionalPlayer, "full": hanabi.SelfIntentionalPlayer}
+ais = {"random": hanabi.Player, "full": hanabi.SelfIntentionalPlayer, "prob": hanabi.ProbablyIntentionalPlayer}
 
 class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     def do_HEAD(s):
@@ -649,7 +649,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             
         
         elif path.startswith("/new/") and debug:
-            
+            random.seed(2)
         
             type = s.path[5:]
             if type in ais:
@@ -948,10 +948,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             s.wfile.write("<html><head><title>Hanabi</title></head>\n")
             s.wfile.write('<body><h1>Welcome to Hanabi</h1> <p>To start, choose an AI:</p>\n')
             s.wfile.write('<ul><li><a href="/new/random">Random</a></li>\n')
-            s.wfile.write('<li><a href="/new/inner">Inner State</a></li>\n')
-            s.wfile.write('<li><a href="/new/outer">Outer State</a></li>\n')
-            s.wfile.write('<li><a href="/new/self">Self Recognition</a></li>\n')
-            s.wfile.write('<li><a href="/new/intentional">Intentional Player</a></li>\n')
+            s.wfile.write('<li><a href="/new/prob">Probabilistic Player</a></li>\n')
             s.wfile.write('<li><a href="/new/full">Fully Intentional Player</a></li>\n')
             s.wfile.write('</ul><br/>')
             s.wfile.write('<p>Or select a <a href="/selectreplay/">replay file to view</a></p>')

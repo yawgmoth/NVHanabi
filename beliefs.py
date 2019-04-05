@@ -186,19 +186,21 @@ def interpret_hint(old_knowledge, knowledge, played, trash, other_hands, hint, b
                         k[c][i] *= 2
                     elif i >= board[c][1]:
                         k[c][i] *= 0.5
+    currbest = 0
     if hasplayable:
         play = None
         for i,c in enumerate(newknowledge):
             playprob = playable_probability(c, board)
-            if playprob > 0.85:
+            if playprob > 0.75 and playprob > currbest + 0.02:
                 play = i 
+                currbest = playprob
         if play is not None:
             return (Action(PLAY, cnr=play), True)
  
     discard = None
     for i,c in enumerate(newknowledge_discard):
         playprob = useless_probability(c, board)
-        if playprob > 0.85:
+        if playprob > 0.6:
             discard = i 
     if discard is not None:
         return (Action(DISCARD, cnr=discard), True)
