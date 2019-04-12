@@ -313,6 +313,7 @@ class ProbablyIntentionalPlayer(Player):
         self.last_played = []
         self.last_board = []
         self.explanation = []
+        self.sub = SelfIntentionalPlayer(name, pnr)
     def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints):
         if not self.last_knowledge:
             self.last_knowledge = [initial_knowledge(len(knowledge[nr])) for i in knowledge]
@@ -330,7 +331,12 @@ class ProbablyIntentionalPlayer(Player):
             (act,plr) = self.gothint
             self.gothint = None
             (iact,force) = interpret_hint(self.last_knowledge[nr], knowledge[nr], played, trash, hands[1-nr], act, board)
-            if force: 
+            subact = self.sub.get_action(nr, hands, knowledge, trash, played, board, valid_actions, hints)
+            if subact.type == iact.type and iact.type == PLAY and iact.cnr != subact.cnr:
+                print ">>>>> diff"
+            
+            if force:
+                
                 return iact
 
 
@@ -429,6 +435,7 @@ class ProbablyIntentionalPlayer(Player):
         
         return random.choice([Action(DISCARD, cnr=i) for i in xrange(handsize)])
     def inform(self, action, player, game):
+        self.sub.inform(action, player, game)
         if action.type in [PLAY, DISCARD]:
             x = str(action)
             if (action.cnr,player) in self.hints:
@@ -642,7 +649,7 @@ def make_player(player, i):
         return SamplingRecognitionPlayer(names[i], i, playertypes[other])
     return None 
     
-def main(args, n=10000):
+def main(args, n=10000, s=1):
     if not args:
         args = ["random"]*3
     if args[0] == "trial":
@@ -656,7 +663,7 @@ def main(args, n=10000):
             avgtimes = []
             print "trial", i+1
             for t in treatments:
-                random.seed(i)
+                random.seed(i+s)
                 players = []
                 for i,player in enumerate(t):
                     players.append(make_player(player,i))
@@ -673,7 +680,7 @@ def main(args, n=10000):
         
         return
         
-        
+
     players = []
     
     for i,a in enumerate(args):
@@ -686,7 +693,7 @@ def main(args, n=10000):
     for i in xrange(n):
         if (i+1)%100 == 0:
             print "Starting game", i+1
-        random.seed(i+1)
+        random.seed(i+s)
         g = Game(players, out)
         try:
             pts.append(g.run())
@@ -711,6 +718,6 @@ if __name__ == "__main__":
     parser.add_argument('--count', "-n", dest='n', action='store',
                         default=10000, type=int,
                         help='How many games to play (default: 10000)')
-
+    parser.add_argument("--seed", "-s", dest="s", action="store", default=1, type=int, help="Offset to add to random seed for each game")
     args = parser.parse_args()
-    main(args.players, args.n)
+    main(args.players, args.n, args.s)

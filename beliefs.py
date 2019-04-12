@@ -16,8 +16,8 @@ def fk(knowledge):
     result = ""
     for i,k in enumerate(knowledge):
         item = ""
-        for col in k:
-            item += "\t" + str(col) + "\n"
+        for j,col in enumerate(k):
+            item += "\t" + COLORNAMES[j] + ": " + str(col) + "\n"
         result += "card %d\n%s"%(i,item)
     return result
           
@@ -161,6 +161,11 @@ def useless_probability(knowledge, board):
         for i in xrange(board[col][1]):
             prob += norm[col][i]
     return prob
+	
+def matches_hint((col,rank), hint):
+    if hint.type == HINT_VALUE:
+	    return rank == hint.num - 1
+    return col == hint.col
     
     
 def interpret_hint(old_knowledge, knowledge, played, trash, other_hands, hint, board):
@@ -174,10 +179,10 @@ def interpret_hint(old_knowledge, knowledge, played, trash, other_hands, hint, b
         if potentially_playable(get_possible(delta), board):
             hasplayable = True
             for c in ALL_COLORS:
-                if board[c][1] < 5 and d[c][board[c][1]] > 0:
+                if board[c][1] < 5 and d[c][board[c][1]] > 0 and matches_hint(board[c], hint):
                     k[c][board[c][1]] *= 2
                 for i in xrange(5):
-                    if i != board[c][1]:
+                    if i != board[c][1] or not matches_hint(board[c], hint):
                         k[c][i] *= 0.1
         if potentially_useless(get_possible(delta), board):
             for c in ALL_COLORS:
@@ -187,14 +192,17 @@ def interpret_hint(old_knowledge, knowledge, played, trash, other_hands, hint, b
                     elif i >= board[c][1]:
                         k[c][i] *= 0.5
     currbest = 0
+    pp = None
     if hasplayable:
         play = None
         for i,c in enumerate(newknowledge):
             playprob = playable_probability(c, board)
-            if playprob > 0.75 and playprob > currbest + 0.02:
+            if playprob > 0.75 and playprob > currbest - 0.02:
+                pp = c
                 play = i 
                 currbest = playprob
         if play is not None:
+            #print fk(newknowledge)
             return (Action(PLAY, cnr=play), True)
  
     discard = None
