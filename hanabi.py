@@ -8,15 +8,7 @@ import argparse
 
 
 
-# semi-intelligently format cards in any format
-def f(something):
-    if type(something) == list:
-        return map(f, something)
-    elif type(something) == dict:
-        return {k: something(v) for (k,v) in something.iteritems()}
-    elif type(something) == tuple and len(something) == 2:
-        return (COLORNAMES[something[0]],something[1])
-    return something
+
 
 def make_deck():
     deck = []
@@ -330,10 +322,11 @@ class ProbablyIntentionalPlayer(Player):
         if self.gothint:
             (act,plr) = self.gothint
             self.gothint = None
-            (iact,force) = interpret_hint(self.last_knowledge[nr], knowledge[nr], played, trash, hands[1-nr], act, board)
+            (iact,force,expl) = interpret_hint(self.last_knowledge[nr], knowledge[nr], played, trash, hands[1-nr], act, board)
             subact = self.sub.get_action(nr, hands, knowledge, trash, played, board, valid_actions, hints)
-            if subact.type == iact.type and iact.type == PLAY and iact.cnr != subact.cnr:
-                print ">>>>> diff"
+            self.explanation.extend(expl)
+            #if subact.type == iact.type and iact.type == PLAY and iact.cnr != subact.cnr:
+            #    print ">>>>> diff"
             
             if force:
                 

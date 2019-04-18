@@ -70,6 +70,15 @@ def format_knowledge(k):
                 result += COLORNAMES[col] + " " + str(i+1) + ": " + str(cnt) + "\n"
     return result
 
+def format_probs(k):
+    result = ""
+    for col in ALL_COLORS:
+        for i,cnt in enumerate(k[col]):
+            if cnt > 0:
+                result += COLORNAMES[col] + " " + str(i+1) + ": %.2f\n"%cnt 
+    return result
+    
+
 def get_possible(knowledge):
     result = []
     for col in ALL_COLORS:
@@ -146,6 +155,9 @@ def normalize(knowledge):
         result.append(colk)
     return result
     
+def knormalize(knowledge):
+    return map(normalize,  knowledge)
+    
 def playable_probability(knowledge, board):
     norm = normalize(knowledge)
     prob = 0
@@ -163,55 +175,70 @@ def useless_probability(knowledge, board):
     return prob
 	
 def matches_hint((col,rank), hint):
-    if hint.type == HINT_VALUE:
+    if hint.type == HINT_NUMBER:
 	    return rank == hint.num - 1
     return col == hint.col
     
     
 def interpret_hint(old_knowledge, knowledge, played, trash, other_hands, hint, board):
-    
+    explanation = []
     delta = invert(difference(knowledge, old_knowledge))
     
     newknowledge = update_knowledge(knowledge, board + trash + other_hands)
     newknowledge_discard = update_knowledge(knowledge, board + trash + other_hands)
     hasplayable = False
+    update = []
     for d,k,k1 in zip(delta, newknowledge, newknowledge_discard):
+        uu = ""
         if potentially_playable(get_possible(delta), board):
             hasplayable = True
+            
             for c in ALL_COLORS:
                 if board[c][1] < 5 and d[c][board[c][1]] > 0 and matches_hint(board[c], hint):
                     k[c][board[c][1]] *= 2
+                    uu += COLORNAMES[c] + " " + str(board[c][1] + 1) + "*2\n"
                 for i in xrange(5):
                     if i != board[c][1] or not matches_hint(board[c], hint):
                         k[c][i] *= 0.1
+                        uu += COLORNAMES[c] + " " + str(i + 1) + "*0.1\n"
+        update.append(uu)
         if potentially_useless(get_possible(delta), board):
             for c in ALL_COLORS:
                 for i in xrange(5):
                     if i < board[c][1]:
-                        k[c][i] *= 2
+                        k1[c][i] *= 2
                     elif i >= board[c][1]:
-                        k[c][i] *= 0.5
+                        k1[c][i] *= 0.5
+   
+    explanation.append(["Information delta from hint"] + map(format_knowledge, delta))
+    explanation.append(["Probability update"] + update)
+    explanation.append(["Card probabilities"] +  map(format_probs, knormalize(newknowledge)))
     currbest = 0
+    
+    
     pp = None
     if hasplayable:
         play = None
+        ppbs = []
         for i,c in enumerate(newknowledge):
             playprob = playable_probability(c, board)
-            if playprob > 0.75 and playprob > currbest - 0.02:
+            ppbs.append("%.2f"%playprob)
+            if playprob > 0.75 and playprob > currbest - 0.1:
                 pp = c
                 play = i 
                 currbest = playprob
+        explanation.append(["Playability probabilities"] + ppbs)
         if play is not None:
             #print fk(newknowledge)
-            return (Action(PLAY, cnr=play), True)
- 
+            return (Action(PLAY, cnr=play), True, explanation)
+    
     discard = None
     for i,c in enumerate(newknowledge_discard):
         playprob = useless_probability(c, board)
-        if playprob > 0.6:
+        if playprob > 0.7:
             discard = i 
     if discard is not None:
-        return (Action(DISCARD, cnr=discard), True)
+        return (Action(DISCARD, cnr=discard), True, explanation)
     
     newknowledge = update_knowledge(knowledge, board + trash + other_hands)
     probs = map(normalize, newknowledge)
@@ -237,7 +264,7 @@ def interpret_hint(old_knowledge, knowledge, played, trash, other_hands, hint, b
                         expected -= value
         if expected > best:
             besti = cnr
-    return (Action(DISCARD, cnr=besti), False)
+    return (Action(DISCARD, cnr=besti), False, explanation)
     
     
     

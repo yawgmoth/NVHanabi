@@ -29,3 +29,13 @@ class Action(object):
             return "discards their " + str(self.cnr)
     def __eq__(self, other):
         return (self.type, self.pnr, self.col, self.num, self.cnr) == (other.type, other.pnr, other.col, other.num, other.cnr)
+        
+# semi-intelligently format cards in any format
+def f(something):
+    if type(something) == list:
+        return map(f, something)
+    elif type(something) == dict:
+        return {k: something(v) for (k,v) in something.iteritems()}
+    elif type(something) == tuple and len(something) == 2:
+        return (COLORNAMES[something[0]],something[1])
+    return something
