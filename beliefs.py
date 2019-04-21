@@ -180,7 +180,7 @@ def matches_hint((col,rank), hint):
     return col == hint.col
     
     
-def interpret_hint(old_knowledge, knowledge, played, trash, other_hands, hint, board):
+def interpret_hint(old_knowledge, knowledge, played, trash, other_hands, hint, board, quality, use_timing=False):
     explanation = []
     delta = invert(difference(knowledge, old_knowledge))
     
@@ -188,6 +188,9 @@ def interpret_hint(old_knowledge, knowledge, played, trash, other_hands, hint, b
     newknowledge_discard = update_knowledge(knowledge, board + trash + other_hands)
     hasplayable = False
     update = []
+    factor = 2
+    if use_timing:
+        factor *= quality
     for d,k,k1 in zip(delta, newknowledge, newknowledge_discard):
         uu = ""
         if potentially_playable(get_possible(delta), board):
@@ -195,8 +198,8 @@ def interpret_hint(old_knowledge, knowledge, played, trash, other_hands, hint, b
             
             for c in ALL_COLORS:
                 if board[c][1] < 5 and d[c][board[c][1]] > 0 and matches_hint(board[c], hint):
-                    k[c][board[c][1]] *= 2
-                    uu += COLORNAMES[c] + " " + str(board[c][1] + 1) + "*2\n"
+                    k[c][board[c][1]] *= factor
+                    uu += COLORNAMES[c] + " " + str(board[c][1] + 1) + "*%.2f\n"%factor
                 for i in xrange(5):
                     if i != board[c][1] or not matches_hint(board[c], hint):
                         k[c][i] *= 0.1
@@ -206,7 +209,7 @@ def interpret_hint(old_knowledge, knowledge, played, trash, other_hands, hint, b
             for c in ALL_COLORS:
                 for i in xrange(5):
                     if i < board[c][1]:
-                        k1[c][i] *= 2
+                        k1[c][i] *= factor
                     elif i >= board[c][1]:
                         k1[c][i] *= 0.5
    

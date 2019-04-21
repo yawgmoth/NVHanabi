@@ -5,7 +5,7 @@ import time
 from beliefs import *
 from actions import *
 import argparse
-
+import numpy
 
 
 
@@ -295,8 +295,18 @@ class SelfIntentionalPlayer(Player):
             self.last_trash = game.trash[:]
             self.played = game.played[:]
             
+def TimingProb(name, pnr):
+    return ProbablyIntentionalPlayer(name, pnr, True)
+    
+RECORD_TIMES = 5
+MAJOR_LOW = 1.4
+MINOR_LOW = 1.2
+MINOR_HIGH = 0.8
+MAJOR_HIGH = 0.6
+
+            
 class ProbablyIntentionalPlayer(Player):
-    def __init__(self, name, pnr):
+    def __init__(self, name, pnr, use_timing=False):
         self.name = name
         self.hints = {}
         self.pnr = pnr
@@ -306,30 +316,51 @@ class ProbablyIntentionalPlayer(Player):
         self.last_board = []
         self.explanation = []
         self.sub = SelfIntentionalPlayer(name, pnr)
+        self.use_timing = use_timing
+        self.timing = [1 for i in range(RECORD_TIMES)]
+        self.last_time = time.time()
     def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints):
+        self.explanation = []
+        delta = time.time() - self.last_time 
+        avg = numpy.mean(self.timing)
+        stddev = numpy.std(self.timing)
+        quality = 1
+        if delta < avg - 2*stddev:
+            quality = MAJOR_LOW
+        elif delta < avg - stddev:
+            quality = MINOR_LOW
+        elif delta > avg + 2*stddev:
+            quality = MAJOR_HIGH
+        elif delta > avg + stddev:
+            quality = MINOR_HIGH
+        self.explanation.append(["Last times"] + map(str, self.timing))
+        self.explanation.append(["current time, thresholds"] + map(str, [delta, avg - 2*stddev, avg - stddev, avg + stddev, avg + 2*stddev]))
+        self.timing.append(delta)
+        self.timing = self.timing[1:]
         if not self.last_knowledge:
             self.last_knowledge = [initial_knowledge(len(knowledge[nr])) for i in knowledge]
         probs = probabilities(knowledge[nr], played, trash, hands[1-nr])
+        
         
         handsize = len(knowledge[0])
         
         possible = []
         result = None
-        self.explanation = []
+
         self.explanation.append(["Your Hand:"] + map(f, hands[1-nr]))
         action = []
         iact = None
         if self.gothint:
             (act,plr) = self.gothint
             self.gothint = None
-            (iact,force,expl) = interpret_hint(self.last_knowledge[nr], knowledge[nr], played, trash, hands[1-nr], act, board)
+            (iact,force,expl) = interpret_hint(self.last_knowledge[nr], knowledge[nr], played, trash, hands[1-nr], act, board, quality, self.use_timing)
             subact = self.sub.get_action(nr, hands, knowledge, trash, played, board, valid_actions, hints)
             self.explanation.extend(expl)
             #if subact.type == iact.type and iact.type == PLAY and iact.cnr != subact.cnr:
             #    print ">>>>> diff"
             
             if force:
-                
+                self.last_time = time.time()
                 return iact
 
 
@@ -420,6 +451,7 @@ class ProbablyIntentionalPlayer(Player):
         self.explanation.append(["Discard Scores"] + map(lambda (a,s,t): "\n".join(map(format_term, t)) + "\n%.2f"%(s), scores))
         scores.sort(key=lambda (a,s,t): -s)
         self.last_knowledge = copy.deepcopy(knowledge)
+        self.last_time = time.time()
         if result:
             return result
         if iact:
@@ -697,7 +729,6 @@ def main(args, n=10000, s=1):
             traceback.print_exc()
     if n < 10:
         print pts
-    import numpy
     print "average:", numpy.mean(pts)
     print "stddev:", numpy.std(pts, ddof=1)
     print "range", min(pts), max(pts)
