@@ -166,12 +166,24 @@ def playable_probability(knowledge, board):
             prob += norm[col][board[col][1]]
     return prob
     
-def useless_probability(knowledge, board):
+def limits(trash):
+    result = []
+    limit = {col: 6 for col in ALL_COLORS}
+    for col in ALL_COLORS:
+        for r in range(5):
+            if trash.count((col,r+1)) == 2 and limit[col] > r+1:
+                limit[col] = r+1
+    return limit
+    
+def useless_probability(knowledge, board, trash):
     norm = normalize(knowledge)
     prob = 0
+    lims = limits(trash)
     for col in ALL_COLORS:
         for i in xrange(board[col][1]):
             prob += norm[col][i]
+        for i in xrange(lims[col], 6):
+            prob += norm[col][i-1]
     return prob
 	
 def matches_hint((col,rank), hint):
@@ -191,6 +203,7 @@ def interpret_hint(old_knowledge, knowledge, played, trash, other_hands, hint, b
     factor = 2
     if use_timing:
         factor *= quality
+    mods = []
     for d,k,k1 in zip(delta, newknowledge, newknowledge_discard):
         uu = ""
         if potentially_playable(get_possible(delta), board):
@@ -200,6 +213,7 @@ def interpret_hint(old_knowledge, knowledge, played, trash, other_hands, hint, b
                 if board[c][1] < 5 and d[c][board[c][1]] > 0 and matches_hint(board[c], hint):
                     k[c][board[c][1]] *= factor
                     uu += COLORNAMES[c] + " " + str(board[c][1] + 1) + "*%.2f\n"%factor
+                    
                 for i in xrange(5):
                     if i != board[c][1] or not matches_hint(board[c], hint):
                         k[c][i] *= 0.1
@@ -216,9 +230,9 @@ def interpret_hint(old_knowledge, knowledge, played, trash, other_hands, hint, b
     explanation.append(["Information delta from hint"] + map(format_knowledge, delta))
     explanation.append(["Probability update"] + update)
     explanation.append(["Card probabilities"] +  map(format_probs, knormalize(newknowledge)))
-    currbest = 0
+    currbest = 0.875
     
-    
+    delta = 1-currbest
     pp = None
     if hasplayable:
         play = None
@@ -226,22 +240,25 @@ def interpret_hint(old_knowledge, knowledge, played, trash, other_hands, hint, b
         for i,c in enumerate(newknowledge):
             playprob = playable_probability(c, board)
             ppbs.append("%.2f"%playprob)
-            if playprob > 0.75 and playprob > currbest - 0.1:
+            if playprob > currbest - delta:
                 pp = c
                 play = i 
                 currbest = playprob
+                delta = (1-currbest)/2
         explanation.append(["Playability probabilities"] + ppbs)
         if play is not None:
             #print fk(newknowledge)
-            return (Action(PLAY, cnr=play), True, explanation)
+            return (Action(PLAY, cnr=play, comment="PLAYPROB: $player %.2f %.2f"%(currbest, quality)), True, explanation)
     
     discard = None
+    discprob = 0
     for i,c in enumerate(newknowledge_discard):
-        playprob = useless_probability(c, board)
+        playprob = useless_probability(c, board, trash)
         if playprob > 0.7:
             discard = i 
+            discprob = playprob
     if discard is not None:
-        return (Action(DISCARD, cnr=discard), True, explanation)
+        return (Action(DISCARD, cnr=discard, comment="DISCPROB: $player %.2f %.2f"%(discprob, quality)), True, explanation)
     
     newknowledge = update_knowledge(knowledge, board + trash + other_hands)
     probs = map(normalize, newknowledge)

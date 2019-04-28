@@ -24,6 +24,7 @@ class Player(object):
     def __init__(self, name, pnr):
         self.name = name
         self.explanation = []
+        self.alternative_action = None
     def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints):
         return random.choice(valid_actions)
     def inform(self, action, player, game):
@@ -167,6 +168,7 @@ class SelfIntentionalPlayer(Player):
         self.last_played = []
         self.last_board = []
         self.explanation = []
+        self.alternative_action = None
     def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints):
         handsize = len(knowledge[0])
         possible = []
@@ -321,6 +323,7 @@ class ProbablyIntentionalPlayer(Player):
         self.last_time = time.time()
     def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints):
         self.explanation = []
+        self.alternative_action = None
         delta = time.time() - self.last_time 
         avg = numpy.mean(self.timing)
         stddev = numpy.std(self.timing)
@@ -354,6 +357,9 @@ class ProbablyIntentionalPlayer(Player):
             (act,plr) = self.gothint
             self.gothint = None
             (iact,force,expl) = interpret_hint(self.last_knowledge[nr], knowledge[nr], played, trash, hands[1-nr], act, board, quality, self.use_timing)
+            altact = None
+            if self.use_timing:
+                (altact,_,e) = interpret_hint(self.last_knowledge[nr], knowledge[nr], played, trash, hands[1-nr], act, board, 1, False)
             subact = self.sub.get_action(nr, hands, knowledge, trash, played, board, valid_actions, hints)
             self.explanation.extend(expl)
             #if subact.type == iact.type and iact.type == PLAY and iact.cnr != subact.cnr:
@@ -361,6 +367,7 @@ class ProbablyIntentionalPlayer(Player):
             
             if force:
                 self.last_time = time.time()
+                self.alternative_action = altact
                 return iact
 
 
@@ -430,7 +437,7 @@ class ProbablyIntentionalPlayer(Player):
                 self.explanation.append(["Prediction for: Hint Rank " + str(r)] + map(format_intention, expl))
                 #print isvalid, score
                 if isvalid:
-                    valid.append((action,score))
+                    valid.append((action,score+0.01))
                  
             if valid and not result:
                 valid.sort(key=lambda (a,s): -s)
@@ -455,6 +462,7 @@ class ProbablyIntentionalPlayer(Player):
         if result:
             return result
         if iact:
+            self.alternative_action = altact
             return iact
         return scores[0][0]
         
@@ -480,6 +488,25 @@ def format_card((col,num)):
         
 def format_hand(hand):
     return ", ".join(map(format_card, hand))
+    
+def compare_actions(act1, act2, act1s, act2s):
+    if act1s == act2s:
+        if act1.type == act2.type:
+            return "SAME"
+     
+        if act1.type == PLAY:
+            return "BETTER"
+        if act2.type == PLAY:
+            return "WORSE"
+        
+        if act1.type == DISCARD:
+            return "BETTER Discard"
+        if act2.type == DISCARD:
+            return "WORSE Discard"
+    if act1s:
+        return "BETTER Success"
+    return "WORSE Success"
+       
         
 
 class Game(object):
@@ -503,6 +530,8 @@ class Game(object):
         self.study = False
         if self.format:
             print >> self.log, self.deck
+            for i,h in enumerate(self.hands):
+                print>> self.log, "PLAYER", i, h
     def make_hands(self):
         handsize = 4
         if len(self.players) < 4:
@@ -520,37 +549,67 @@ class Game(object):
         self.hands[pnr].append(self.deck[0])
         self.knowledge[pnr].append(initial_knowledge())
         del self.deck[0]
-    def perform(self, action):
+        
+    def get_outcome(self,action):
+        if action.type == PLAY:
+            (col,num) = self.hands[self.current_player][action.cnr]
+            if self.board[col][1] == num-1:
+                return True
+            else:
+                return False
+        return True
+    
+    def perform(self, action, altact=None):
         for p in self.players:
             p.inform(action, self.current_player, self)
+        
+            
         if format:
             print >> self.log, "MOVE:", self.current_player, action.type, action.cnr, action.pnr, action.col, action.num
+            if action.comment:
+                print >>self.log, action.comment.replace("$player", str(self.current_player))
+        if altact and altact != action:
+            altactsuccess = self.get_outcome(altact)
+            actsuccess = self.get_outcome(action)
+            print >>self.log, "ALTERNATIVE:", self.current_player, altact.type, altact.cnr, altact.pnr, altact.col, altact.num           
+            print >>self.log, "COMPARED:", compare_actions(action, altact, actsuccess, altactsuccess)
         if action.type == HINT_COLOR:
             self.hints -= 1
             print >>self.log, self.players[self.current_player].name, "hints", self.players[action.pnr].name, "about all their", COLORNAMES[action.col], "cards", "hints remaining:", self.hints
             print >>self.log, self.players[action.pnr].name, "has", format_hand(self.hands[action.pnr])
+            hinted = []
+            c = 0
             for (col,num),knowledge in zip(self.hands[action.pnr],self.knowledge[action.pnr]):
                 if col == action.col:
                     for i, k in enumerate(knowledge):
                         if i != col:
                             for i in xrange(len(k)):
                                 k[i] = 0
+                    hinted.append(c)
                 else:
                     for i in xrange(len(knowledge[action.col])):
                         knowledge[action.col][i] = 0
+                    
+                c += 1
+            print >>self.log, "HINTED:", action.pnr, hinted
         elif action.type == HINT_NUMBER:
             self.hints -= 1
             print >>self.log, self.players[self.current_player].name, "hints", self.players[action.pnr].name, "about all their", action.num, "hints remaining:", self.hints
             print >>self.log, self.players[action.pnr].name, "has", format_hand(self.hands[action.pnr])
+            c = 0
+            hinted = []
             for (col,num),knowledge in zip(self.hands[action.pnr],self.knowledge[action.pnr]):
                 if num == action.num:
                     for k in knowledge:
                         for i in xrange(len(COUNTS)):
                             if i+1 != num:
                                 k[i] = 0
+                    hinted.append(c)
                 else:
                     for k in knowledge:
                         k[action.num-1] = 0
+                c += 1
+            print >>self.log, "HINTED:", action.pnr, hinted
         elif action.type == PLAY:
             (col,num) = self.hands[self.current_player][action.cnr]
             print >>self.log, self.players[self.current_player].name, "plays", format_card((col,num)),
@@ -561,10 +620,12 @@ class Game(object):
                     self.hints += 1
                     self.hints = min(self.hints, 8)
                 print >>self.log, "successfully! Board is now", format_hand(self.board)
+                print >>self.log, "SUCCESS:", self.current_player, action.cnr, (col,num), self.board[col]
             else:
                 self.trash.append((col,num))
                 self.hits -= 1
                 print >>self.log, "and fails. Board was", format_hand(self.board)
+                print >>self.log, "FAIL:", self.current_player, action.cnr, (col,num), self.board[col]
             del self.hands[self.current_player][action.cnr]
             del self.knowledge[self.current_player][action.cnr]
             self.draw_card()
@@ -605,7 +666,7 @@ class Game(object):
                 else:
                     hands.append(h)
             action = self.players[self.current_player].get_action(self.current_player, hands, self.knowledge, self.trash, self.played, self.board, self.valid_actions(), self.hints)
-            self.perform(action)
+            self.perform(action, self.players[self.current_player].alternative_action)
             self.current_player += 1
             self.current_player %= len(self.players)
         print >>self.log, "Game done, hits left:", self.hits
@@ -625,7 +686,7 @@ class Game(object):
                 else:
                     hands.append(h)
             action = self.players[self.current_player].get_action(self.current_player, hands, self.knowledge, self.trash, self.played, self.board, self.valid_actions(), self.hints)
-            self.perform(action)
+            self.perform(action, self.players[self.current_player].alternative_action)
             self.current_player += 1
             self.current_player %= len(self.players)
     def external_turn(self, action): 

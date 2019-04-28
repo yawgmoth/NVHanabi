@@ -12,12 +12,13 @@ PLAY = 2
 DISCARD = 3
     
 class Action(object):
-    def __init__(self, type, pnr=None, col=None, num=None, cnr=None):
+    def __init__(self, type, pnr=None, col=None, num=None, cnr=None, comment=None):
         self.type = type
         self.pnr = pnr
         self.col = col
         self.num = num
         self.cnr = cnr
+        self.comment = comment
     def __str__(self):
         if self.type == HINT_COLOR:
             return "hints " + str(self.pnr) + " about all their " + COLORNAMES[self.col] + " cards"

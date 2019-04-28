@@ -1,11 +1,10 @@
 
 
 consent = """<center><table width="800px"><tr><td>
-<font size="16"><b>NC State University<br/> </font>
+<font size="16"><b>University of Costa Rica<br/> </font>
 INFORMED CONSENT FORM for RESEARCH<br/></b>
-<b>Title of Study:</b> Intentional Hanabi AI<br/>
-<b>Principal Investigator:</b>	Markus Eger <br/>
-<b>Faculty Sponsor:</b> Dr. Chris Martens<br/>
+<b>Title of Study:</b> Hanabi AI Agents<br/>
+<b>Principal Investigator:</b> Dr. Markus Eger <br/>
 
 
 <h2>What are some general things you should know about research studies?</h2>
@@ -17,7 +16,7 @@ INFORMED CONSENT FORM for RESEARCH<br/></b>
 <p>The purpose of the study is to determine which type of AI plays well with humans in the cooperative card game Hanabi. <b>You must be between 18 and 64 years to participate.</b></p>
 
 <h2>What will happen if you take part in the study?</h2>
-<p>If you agree to participate in this study, you will play one game of a browser-based implementation of Hanabi with an AI controlled player, and then answer some questions about your experience with the AI and board games in general. If you enjoy your experience (and we hope you do), you can also play multiple times. </p>
+<p>If you agree to participate in this study, you will play two games of a browser-based implementation of Hanabi with an AI controlled player, and then answer some questions about your experience with the AI and board games in general. If you enjoy your experience (and we hope you do), you can also play more often. </p>
 
 <h2>Risks</h2>
 <p>The risks of this study do not exceed normal computer use. </p>
@@ -27,20 +26,17 @@ INFORMED CONSENT FORM for RESEARCH<br/></b>
 
 
 <h2>Confidentiality</h2>
-<p>The information in the study records will be kept confidential to the full extent allowed by law. Data will be stored securely on a secure computer at NC State University. No reference will be made in oral or written reports which could link you to the study. After the conclusion of the study, the information we gathered will be released to the public to foster further research. Note that none of this information can be linked back to you personally, and that you can choose if you want to be included in the published data at the end of the experiment. 
+<p>The information in the study records will be kept confidential to the full extent allowed by law. Data will be stored securely on a secure computer that only the researchers can access. No reference will be made in oral or written reports which could link you to the study. After the conclusion of the study, the information we gathered will be released to the public to foster further research. Note that none of this information can be linked back to you personally, and that you can choose if you want to be included in the published data at the end of the experiment. 
  </p>
 
-<h2>What if you are a NCSU student?</h2>
-<p>Participation in this study is not a course requirement and your participation or lack thereof, will not affect your class standing or grades at NC State. </p>
+<h2>What if you are a UCR student?</h2>
+<p>Participation in this study is not a course requirement and your participation or lack thereof, will not affect your class standing or grades at UCR.</p>
 
-<h2>What if you are a NCSU employee?</h2>
-<p>Participation in this study is not a requirement of your employment at NCSU, and your participation or lack thereof, will not affect your job.  </p>
+<h2>What if you are a UCR employee?</h2>
+<p>Participation in this study is not a requirement of your employment at UCR, and your participation or lack thereof, will not affect your job.</p>
 
 <h2>What if you have questions about this study?</h2>
-<p>If you have questions at any time about the study itself or the procedures implemented in this study, you may contact the researcher, Markus Eger by email: meger@ncsu.edu
-
-<h2>What if you have questions about your rights as a research participant?</h2>
-<p>If you feel you have not been treated according to the descriptions in this form, or your rights as a participant in research have been violated during the course of this project, you may contact Deb Paxton, Regulatory Compliance Administrator at dapaxton@ncsu.edu or by phone at 1-919-515-4514.</p>
+<p>If you have questions at any time about the study itself or the procedures implemented in this study, you may contact the researcher, Markus Eger by email: markus.eger@ucr.ac.cr
 
 <h2>Consent To Participate</h2>
 I have read and understand the above information.  I have received a copy of this form. I agree to participate in this study with the understanding that I may choose not to participate or to stop participating at any time without penalty or loss of benefits to which I am otherwise entitled.</td></tr></table></center>

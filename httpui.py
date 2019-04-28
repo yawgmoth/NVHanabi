@@ -22,7 +22,7 @@ TRASH = 1
 BOARD = 2
 TRASHP = 3
 
-debug = True
+debug = False
 
 
 errlog = sys.stdout
@@ -129,7 +129,7 @@ def format_action((i,(action,pnr,card)), gid, replay=None):
         else:
             result += str(action.num) + "s"
     if i == 0:
-        link = ''
+        explainlink = ''
         if debug:
             if replay:
                 (gid,round,info) = replay
@@ -337,9 +337,16 @@ def unknown_card_image(links=[], highlight=False):
 gameslock = threading.Lock()
 games = {}
 participantslock = threading.Lock()
-participants = {}
-participantstarts = {}
 
+class Participant:
+    def __init__(self, log):
+        self.log = log 
+        self.start = time.time()
+        self.games = 1
+        self.treatment = None
+        self.deck = None
+        
+participants = {}
 
 
 class HTTPPlayer(hanabi.Player):
@@ -465,9 +472,11 @@ def get_replay_info(fname):
                 score = int(items[1])
     except Exception:
         f.close()
+        import traceback
+        traceback.print_exc()
         return (None, None, None)
     f.close()
-    
+    print ai, deck, score
     return (ai, deck, score)
     
 def get_replay_root(fname):
@@ -490,6 +499,8 @@ def format_score(sc):
                 
 # AIClasses
 ais = {"random": hanabi.Player, "full": hanabi.SelfIntentionalPlayer, "prob": hanabi.ProbablyIntentionalPlayer, "timing": hanabi.TimingProb}
+
+ai_names = {"random": "Random", "prob": "Probabilistic Player", "timing": "Probabilistic Player with Timing", "full": "Fully Intentional Player"}
 
 class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     def do_HEAD(s):
@@ -570,17 +581,15 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             todelete = []
             participantslock.acquire()
             try:
-                for g in participantstarts:
-                    if participantstarts[g] + 7200 < time.time():
+                for g in participants:
+                    if participants[g].start + 7200 < time.time():
                         todelete.append(g)
                 for d in todelete:
                     del participants[d]
-                    del participantstarts[d]
             except Exception:
                 errlog.write("Error cleaning participants:\n")
                 errlog.write(traceback.format_exc())
-            participants[gid] = file("log/survey%s.log"%gid, "w")
-            participantstarts[gid] = time.time()
+            participants[gid] = Participant(file("log/survey%s.log"%gid, "w"))
             participantslock.release()
             s.wfile.write("<html><head><title>Hanabi</title></head>")
             s.wfile.write('<body><center>')
@@ -601,7 +610,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             return
             
             
-        if s.path.startswith("/consent"):
+        if s.path.startswith("/consent") or s.path == "/":
             s.consentform()
             return
         doaction = True
@@ -616,9 +625,8 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             
             gid = s.getgid()
             
-            treatments = [("intentional", 1), ("intentional", 2), ("intentional", 3), ("intentional", 4), ("intentional", 5),
-                          ("outer", 1), ("outer", 2), ("outer", 3), ("outer", 4), ("outer", 5),
-                          ("full", 1), ("full", 2), ("full", 3), ("full", 4), ("full", 5)]
+            treatments = [("prob", 1), ("prob", 2), ("prob", 3), ("prob", 4), ("prob", 5),
+                          ("timing", 1), ("timing", 2), ("timing", 3), ("timing", 4), ("timing", 5)]
             random.seed(None)
             t = random.choice(treatments)
             nr = random.randint(6,10000)
@@ -649,8 +657,10 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             
         
         elif path.startswith("/new/") and debug:
-            random.seed(2)
         
+            random.seed(None)
+            r = random.randint(0,100000000)
+            random.seed(r)
             type = s.path[5:]
             if type in ais:
                 ai = ais[type](type, 0)
@@ -658,7 +668,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             player = HTTPPlayer("You", 1)
             gid = s.getgid()
             log = file("log/game%s.log"%gid, "w")
-            print >>log, "Treatment:", type
+            print >>log, "Treatment:", (type,r)
             game = hanabi.Game([ai,player], log=log, format=1)
             game.treatment = type
             game.ping = time.time()
@@ -737,7 +747,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             doaction = False
             turn = -1
             gid = ""
-        elif path.startswith("/starttakeover/"):
+        elif path.startswith("/starttakeover/") and debug:
             items = filter(None, path.split("/"))
             if len(items) < 6:
                 s.wfile.write("<html><head><title>Hanabi</title></head>\n")
@@ -810,7 +820,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             gameslock.release()
             path = "/%d/%s/%s"%(turn, action, arg)
         
-        elif path.startswith("/showsurvey/"):
+        elif path.startswith("/showsurvey/") and debug:
             gid = path[12:28]
             fname = "log/survey%s.log"%gid
             
@@ -834,12 +844,13 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             
             s.wfile.write("</body></html>")
             return
-        elif path.startswith("/selectreplay/"):
+        elif path.startswith("/selectreplay/") and debu:
             filters = path[14:].split("/")
             filters = dict(zip(filters[::2], filters[1::2]))
             s.wfile.write("<html><head><title>Hanabi</title></head>\n")
             s.wfile.write('<body>')
             s.wfile.write('<h1>Replay selection</h1>')
+            s.wfile.write('<a href="/">Back</a>')
             s.wfile.write('<h2>Filters:</h2>')
             def format_filters(f):
                 result = ""
@@ -857,8 +868,8 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             
             s.wfile.write('<p>AI: ')
             
-            for i,(display,value) in enumerate([("Outer State AI", "outer"), ("Intentional AI", "intentional"), ("Full AI", "full")]):
-                s.wfile.write(' <a href="/selectreplay/%s">%s</a> - '%(format_filters(update_filters(filters, "ai", value)), display))
+            for value in ai_names:
+                s.wfile.write(' <a href="/selectreplay/%s">%s</a> - '%(format_filters(update_filters(filters, "ai", value)), ai_names[value]))
             s.wfile.write(' <a href="/selectreplay/%s">any</a></p>'%(format_filters(update_filters(filters, "ai", ""))))
             
             s.wfile.write('<p>Score: ')
@@ -898,7 +909,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             for (score,entry) in replays:
                 s.wfile.write(entry)
             return
-        elif path.startswith("/takeover/"):
+        elif path.startswith("/takeover/") and debug:
             items = filter(None, path.split("/"))
             
             if len(items) < 5:
@@ -947,10 +958,9 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             # /new/<foo> will look up <foo> in the ais dictionary, so make sure the names match
             s.wfile.write("<html><head><title>Hanabi</title></head>\n")
             s.wfile.write('<body><h1>Welcome to Hanabi</h1> <p>To start, choose an AI:</p>\n')
-            s.wfile.write('<ul><li><a href="/new/random">Random</a></li>\n')
-            s.wfile.write('<li><a href="/new/prob">Probabilistic Player</a></li>\n')
-            s.wfile.write('<li><a href="/new/timing">Probabilistic Player with Timing</a></li>\n')
-            s.wfile.write('<li><a href="/new/full">Fully Intentional Player</a></li>\n')
+            s.wfile.write('<ul>')
+            for ai in ai_names:
+                s.wfile.write('<li><a href="/new/%s">%s</a></li>\n'%(ai,ai_names[ai]))
             s.wfile.write('</ul><br/>')
             s.wfile.write('<p>Or select a <a href="/selectreplay/">replay file to view</a></p>')
             s.wfile.write('</body></html>')
@@ -1049,28 +1059,6 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         s.wfile.write('</form></td></tr></table></center>')
         
     def presurvey_questions(s, answers={}):
-        
-        responses = [("20s", "18-29 years"), ("30s", "30-39 years"), ("40s", "40-49 years"), ("50s", "50-64 years"), ("na", "Prefer not to answer")]
-        default = -1
-        if "age" in answers:
-            default = map(lambda (a,b): a, responses).index(answers["age"])
-        s.add_choice("age", "What is your age?", responses, default)
-        
-        responses = [("new", "I never play board or card games"),
-                             ("dabbling", "I rarely play board or card games"),
-                             ("intermediate", "I sometimes play board or card games"),
-                             ("expert", "I often play board or card games")]
-        default = -1
-        if "bgg" in answers:
-            default = map(lambda (a,b): a, responses).index(answers["bgg"])
-        s.add_choice("bgg", "How familiar are you with the board and card games in general?", responses, default)
-                            
-        responses = [("yes", "Yes"), ("no", "No")]
-        default = -1
-        if "gamer" in answers:
-            default = map(lambda (a,b): a, responses).index(answers["gamer"])
-        s.add_choice("gamer", "Do you consider yourself to be a (board) gamer?", responses, default)
-        
         responses = [("new", "I have never played before participating in this experiment"),
                              ("dabbling", "I have played a few (1-10) times"),
                              ("intermediate", "I have played multiple (10-50) times"),
@@ -1079,25 +1067,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         if "exp" in answers:
             default = map(lambda (a,b): a, responses).index(answers["exp"])
         s.add_choice("exp", "How familiar are you with the card game Hanabi?", responses, default)
-        
-        responses = [("never", "I have never played before or can't remember when I played the last time"),
-                             ("long", "The last time I played has been a long time (over a year) ago"),
-                             ("medium", "The last time I played has been some time (between 3 months and a year) ago"),
-                             ("recent", "The last time I played was recent (up to 3 months ago)")]
-        default = -1
-        if "recent" in answers:
-            default = map(lambda (a,b): a, responses).index(answers["recent"])
-        s.add_choice("recent", "When was the last time that you played Hanabi before this experiment?", responses, default)
 
-        responses = [("never", "I never reach the top score, or I have never played Hanabi"),
-                               ("few", "I almost never reach the top score (about one in 50 or more games)"),
-                               ("sometimes", "I sometimes reach the top score (about one in 6-20 games)"),
-                               ("often", "I often reach the top score (about one in 5 or fewer games)")]
-        default = -1
-        if "score" in answers:
-            default = map(lambda (a,b): a, responses).index(answers["score"])
-        s.add_choice("score", "How often do you typically reach the top score of 25 in Hanabi?", responses, default,)
-                               
         responses = [("yes", "Yes"), ("no", "No")]
         default = 0
         if "gamer" in answers:
@@ -1108,7 +1078,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         
         
     def postsurvey(s, gid, warn=False):
-        s.wfile.write('<center><h1>Please answer some questions about your experience with the AI</h1>')
+        s.wfile.write('<center><h1>Please answer some questions about your experience with the AI agent</h1>')
         s.wfile.write('<table width="600px">\n<tr><td>')
         s.wfile.write('<form action="/submitpost" method="POST">')
         s.postsurvey_questions()
@@ -1118,35 +1088,25 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         s.wfile.write('</form></td></tr></table></center>')
     
     def postsurvey_questions(s, answers={}):
-        responses = [("1", "Never performed goal-directed actions"),
-                             ("2", "Rarely performed goal-directed actions"),
-                             ("3", "Sometimes performed goal-directed actions"),
-                             ("4", "Often performed goal-directed actions"),
-                             ("5", "Always performed goal-directed actions")]
-        default = -1
-        if "intention" in answers:
-            default = map(lambda (a,b): a, responses).index(answers["intention"])
-        s.add_choice("intention", "How intentional/goal-directed did you think this AI was playing?", responses, default)
-        
-        responses = [("vbad", "The AI played very badly"),
-                               ("bad", "The AI played badly"),
-                               ("ok", "The AI played ok"),
-                               ("good", "The AI played well"),
-                               ("vgood", "The AI played very well")]
+        responses = [("vbad", "The AI agent played very badly"),
+                               ("bad", "The AI agent played badly"),
+                               ("ok", "The AI agent played ok"),
+                               ("good", "The AI agent played well"),
+                               ("vgood", "The AI agent played very well")]
         default = -1
         if "skill" in answers:
             default = map(lambda (a,b): a, responses).index(answers["skill"])
-        s.add_choice("skill", "How would you rate the play skill of this AI?", responses, default)
+        s.add_choice("skill", "How would you rate the play skill of this AI agent?", responses, default)
 
-        responses = [("vhate", "I really disliked playing with this AI"),
-                               ("hate", "I somewhat disliked playing with this AI"),
-                               ("neutral", "I neither liked nor disliked playing with this AI"),
-                               ("like", "I somewhat liked playing with this AI"),
-                               ("vlike", "I really liked playing with this AI")]
+        responses = [("vmisunderstood", "The AI agent always misunderstood my hints"),
+                               ("misunderstood", "The AI agent often misunderstood my hints"),
+                               ("neutral", "The AI agent sometimes understood my hints correctly and sometimes did not"),
+                               ("understood", "The AI agent often understood my hints correctly"),
+                               ("vunderstood", "The AI agent always understood my hints correctly")]
         default = -1
-        if "like" in answers:
-            default = map(lambda (a,b): a, responses).index(answers["like"])
-        s.add_choice("like", "How much did you enjoy playing with this AI?", responses, default)
+        if "hintunderstanding" in answers:
+            default = map(lambda (a,b): a, responses).index(answers["hintunderstanding"])
+        s.add_choice("hintunderstanding", "How well did the AI agent understand the hints you gave it?", responses, default)
         
         
     def parse_POST(self):
@@ -1172,6 +1132,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         s.end_headers()
         tvars = s.parse_POST()
         vars = {}
+        game2 = False
         for v in tvars:
             vars[v] = tvars[v][0]
         if s.path.startswith("/submitpost2"):
@@ -1182,16 +1143,15 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                 gid = vars["gid"]
 
             if gid not in participants:
-                print >>errlog, gid, "not in participants", participants
+                print >>errlog, gid, "not in participants", participants.keys()
                 return s.presurvey(gid)
             
             participantslock.acquire()
             for r in required:
                 if r in vars:
-                    print >> participants[gid], r, vars[r]
-            participants[gid].close()
+                    print >> participants[gid].log, r, vars[r]
+            participants[gid].log.close()
             del participants[gid]
-            del participantstarts[gid]
             participantslock.release()
             s.wfile.write("<html><head><title>Hanabi</title></head>")
             s.wfile.write('<body><center>')
@@ -1200,31 +1160,77 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             s.wfile.write('<a href="/new/study/%s">Play again</a><br/>You can bookmark this link and play again at any later time. <br/>Any additional games you play will also be recorded for future analysis, and published if you agreed to publication.'%(gid))
             
             s.wfile.write('</body></html>')
+        elif s.path.startswith("/submitpost"):
+            required = ["hintunderstanding", "skill"]
             
-            
-            
-        elif s.path.startswith("/tutorialdone"):
             gid = s.getgid()
             if "gid" in vars and vars["gid"]:
                 gid = vars["gid"]
+
+            if gid not in participants:
+                s.wfile.write("<html><head><title>Hanabi</title></head>")
+                s.wfile.write('<body><center>')
+                s.wfile.write("<h1>Session timed out. Thank you for your time and participation</h1>")                
+                s.wfile.write('</body></html>')
+                return
+            participantslock.acquire()
+            p = participants[gid]
+            for r in required:
+                if r in vars:
+                    print >> p.log, r, vars[r]
+            p.log.flush()
+            participantslock.release()
+            if p.games < 2:
+                p.games += 1
+                game2 = True
+                game1id = gid
+                p1 = p
+                participantslock.acquire()
+                del participants[gid]
+                participantslock.release()
+            else:
+                s.presurvey(gid)    
+            
+            
+        if s.path.startswith("/tutorialdone") or game2:
+            gid = s.getgid()
+            if "gid" in vars and vars["gid"] and not game2:
+                gid = vars["gid"]
             participantslock.acquire()
             if gid not in participants:
-                participants[gid] = file("log/survey%s.log"%gid, "w")
-                participantstarts[gid] = time.time()
+                participants[gid] = Participant(file("log/survey%s.log"%gid, "w"))
+            p = participants[gid]
+            if game2:
+                print >>p.log, "predecessor", game1id
+                print >>p1.log, "successor", gid
+                p1.log.close()
+                p.games = p1.games
+                p.log.flush()
             participantslock.release()
-            treatments = [("intentional", 1), ("intentional", 2), ("intentional", 3), ("intentional", 4), ("intentional", 5),
-                          ("outer", 1), ("outer", 2), ("outer", 3), ("outer", 4), ("outer", 5),
-                          ("full", 1), ("full", 2), ("full", 3), ("full", 4), ("full", 5)]
+            treatments = [("prob", 1), ("prob", 2), ("prob", 3), ("prob", 4), ("prob", 5),
+                          ("timing", 1), ("timing", 2), ("timing", 3), ("timing", 4), ("timing", 5)]
             random.seed(None)
-            t = random.choice(treatments)            
+            t = random.choice(treatments)
             type = t[0]
+            deck = t[1]
+            if game2:
+                if p1.treatment == "prob":
+                    type = "timing"
+                else:
+                    type = "prob"
+                decks = range(1,6)
+                decks.remove(p1.deck)
+                deck = random.choice(decks)
             if type in ais:
                 ai = ais[type](type, 0)
+            p.treatment = type
+            p.deck = deck
+                
             turn = 1
             player = HTTPPlayer("You", 1)
             log = file("log/game%s.log"%gid, "w")
             print >>log, "Treatment:", t
-            random.seed(t[1])
+            random.seed(deck)
             game = hanabi.Game([ai,player], log=log, format=1)
             game.treatment = t
             game.ping = time.time()
@@ -1245,26 +1251,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             s.wfile.write(show_game_state(game, player, turn, gid))
            
             s.wfile.write("</body></html>")
-        elif s.path.startswith("/submitpost"):
-            required = ["intention", "skill", "like"]
-            
-            gid = s.getgid()
-            if "gid" in vars and vars["gid"]:
-                gid = vars["gid"]
-
-            if gid not in participants:
-                s.wfile.write("<html><head><title>Hanabi</title></head>")
-                s.wfile.write('<body><center>')
-                s.wfile.write("<h1>Session timed out. Thank you for your time and participation</h1>")                
-                s.wfile.write('</body></html>')
-                return
-            participantslock.acquire()
-            for r in required:
-                if r in vars:
-                    print >> participants[gid], r, vars[r]
-            participants[gid].flush()
-            participantslock.release()
-            s.presurvey(gid)
+        
             
         
     def consentform(s):
