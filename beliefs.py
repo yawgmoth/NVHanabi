@@ -143,7 +143,7 @@ def invert(k):
     return difference(k, initial_knowledge(len(k)))
     
 def normalize(knowledge):
-    total = sum(map(sum, knowledge))
+    total = 1.0*sum(map(sum, knowledge))
     result = []
     for col in ALL_COLORS:
         colk = []
@@ -197,12 +197,23 @@ def interpret_hint(old_knowledge, knowledge, played, trash, other_hands, hint, b
     delta = invert(difference(knowledge, old_knowledge))
     
     newknowledge = update_knowledge(knowledge, board + trash + other_hands)
+    explanation.append(["Updated knowledge"] +  map(format_probs, newknowledge))
+    explanation.append(["Updated normalized knowledge"] +  map(format_probs, knormalize(newknowledge)))
+    
     newknowledge_discard = update_knowledge(knowledge, board + trash + other_hands)
     hasplayable = False
     update = []
-    factor = 2
+    factor = 2.0
+    devaluation = 10.0
+    discarddevaluation = 2.0
     if use_timing:
         factor *= quality
+        devaluation *= quality
+        discarddevaluation *= quality
+    devaluation = 1/devaluation 
+    discarddevaluation = 1/discarddevaluation
+    
+    explanation.append(["Factors", str(devaluation), str(discarddevaluation), str(factor), str(quality)])
     mods = []
     for d,k,k1 in zip(delta, newknowledge, newknowledge_discard):
         uu = ""
@@ -211,13 +222,14 @@ def interpret_hint(old_knowledge, knowledge, played, trash, other_hands, hint, b
             
             for c in ALL_COLORS:
                 if board[c][1] < 5 and d[c][board[c][1]] > 0 and matches_hint(board[c], hint):
-                    k[c][board[c][1]] *= factor
-                    uu += COLORNAMES[c] + " " + str(board[c][1] + 1) + "*%.2f\n"%factor
                     
+                    uu += COLORNAMES[c] + " " + str(board[c][1] + 1) + "(%.2f*%.3f)\n"%(k[c][board[c][1]],factor)
+                    k[c][board[c][1]] *= factor
                 for i in xrange(5):
                     if i != board[c][1] or not matches_hint(board[c], hint):
-                        k[c][i] *= 0.1
-                        uu += COLORNAMES[c] + " " + str(i + 1) + "*0.1\n"
+                        uu += COLORNAMES[c] + " " + str(i + 1) + "(%.2f*%.3f)\n"%(k[c][i],devaluation)
+                        k[c][i] *= devaluation
+                        
         update.append(uu)
         if potentially_useless(get_possible(delta), board):
             for c in ALL_COLORS:
@@ -225,7 +237,7 @@ def interpret_hint(old_knowledge, knowledge, played, trash, other_hands, hint, b
                     if i < board[c][1]:
                         k1[c][i] *= factor
                     elif i >= board[c][1]:
-                        k1[c][i] *= 0.5
+                        k1[c][i] *= discarddevaluation
    
     explanation.append(["Information delta from hint"] + map(format_knowledge, delta))
     explanation.append(["Probability update"] + update)
@@ -257,8 +269,8 @@ def interpret_hint(old_knowledge, knowledge, played, trash, other_hands, hint, b
         if playprob > 0.7:
             discard = i 
             discprob = playprob
-    if discard is not None:
-        return (Action(DISCARD, cnr=discard, comment="DISCPROB: $player %.2f %.2f"%(discprob, quality)), True, explanation)
+    #if discard is not None:
+    #    return (Action(DISCARD, cnr=discard, comment="DISCPROB: $player %.2f %.2f"%(discprob, quality)), True, explanation)
     
     newknowledge = update_knowledge(knowledge, board + trash + other_hands)
     probs = map(normalize, newknowledge)

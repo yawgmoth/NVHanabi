@@ -157,7 +157,10 @@ def show_game_state(game, player, turn, gid, replay=False):
     aicards = []
     for i,c in enumerate(game.hands[0]):
         aicards.append(make_ai_card((i,c), (HAND, 0, i) in player.show))
-        aicards.append(", ".join(player.aiknows[i]))
+        knowledge = ", ".join(player.aiknows[i])
+        if player.ainewcard and i == 4:
+            knowledge = "New card " + knowledge
+        aicards.append(knowledge)
     
     while len(aicards) < 10:
         aicards.append("")
@@ -175,7 +178,10 @@ def show_game_state(game, player, turn, gid, replay=False):
             yourcards.append(make_ai_card((i,c), False))
         else:
             yourcards.append(make_your_card((i,c), (HAND, 1, i) in player.show))
-        yourcards.append(", ".join(player.knows[i]))
+        knowledge = ", ".join(player.knows[i])
+        if player.newcard and i == 4:
+            knowledge = "New card " + knowledge
+        yourcards.append(knowledge)
     while len(yourcards) < 10:
         yourcards.append("")
     board = format_board(game, player.show, gid)
@@ -356,11 +362,18 @@ class HTTPPlayer(hanabi.Player):
         self.actions = []
         self.knows = [set() for i in xrange(5)]
         self.aiknows = [set() for i in xrange(5)]
+        self.ainewcard = False
+        self.newcard = False
         self.show = []
     
     def inform(self, action, player, game):
         if player == 1:
             self.show = []
+        if player == self.pnr:
+            self.newcard = False
+        else:
+            self.ainewcard = False
+        
         card = None
         if action.type in [hanabi.PLAY, hanabi.DISCARD]:
             card = game.hands[player][action.cnr]
@@ -425,15 +438,17 @@ class HTTPPlayer(hanabi.Player):
         if player == self.pnr and action.type in [hanabi.PLAY, hanabi.DISCARD]:
             del self.knows[action.cnr]
             self.knows.append(set())
+            self.newcard = True
         if player != self.pnr and action.type in [hanabi.PLAY, hanabi.DISCARD]:
             del self.aiknows[action.cnr]
             self.aiknows.append(set())
+            self.ainewcard = True
             
 class ReplayHTTPPlayer(HTTPPlayer):
     def __init__(self, name, pnr):
         super(ReplayHTTPPlayer, self).__init__(name,pnr)
         self.actions = []
-    def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints):
+    def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints, hits):
         return self.actions.pop(0)
             
 class ReplayPlayer(hanabi.Player):
@@ -441,9 +456,9 @@ class ReplayPlayer(hanabi.Player):
         super(ReplayPlayer, self).__init__(name,pnr)
         self.actions = []
         self.realplayer = None
-    def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints):
+    def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints, hits):
         if self.realplayer:
-            self.realplayer.get_action(nr, hands, knowledge, trash, played, board, valid_actions, hints)
+            self.realplayer.get_action(nr, hands, knowledge, trash, played, board, valid_actions, hints, hits)
         return self.actions.pop(0)
     def inform(self, action, player, game):
         if self.realplayer:

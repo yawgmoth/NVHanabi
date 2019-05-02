@@ -25,7 +25,7 @@ class Player(object):
         self.name = name
         self.explanation = []
         self.alternative_action = None
-    def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints):
+    def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints, hits):
         return random.choice(valid_actions)
     def inform(self, action, player, game):
         pass
@@ -58,7 +58,7 @@ def whattodo(knowledge, pointed, board):
         return DISCARD
     return None
 
-def pretend(action, knowledge, intentions, hand, board):
+def pretend(action, knowledge, intentions, hand, board, hits):
     (type,value) = action
     positive = []
     haspositive = False
@@ -89,16 +89,22 @@ def pretend(action, knowledge, intentions, hand, board):
     score = 0
     predictions = []
     pos = False
+    index = 1
     for i,c,k,p in zip(intentions, hand, newknowledge, positive):
         
         action = whattodo(k, p, board)
         
         if action == PLAY and i != PLAY:
-            #print "would cause them to play", f(c)
-            return False, 0, predictions + [PLAY]
+            if hits > 1:
+                return False, 0, predictions + [PLAY]
+            else:
+                predictions.append(PLAY)
+                if i in [DISCARD, CANDISCARD]:
+                    score -= index*0.2
+                else:
+                    score -= index
         
         if action == DISCARD and i not in [DISCARD, CANDISCARD]:
-            #print "would cause them to discard", f(c)
             return False, 0, predictions + [DISCARD]
             
         if action == PLAY and i == PLAY:
@@ -114,6 +120,9 @@ def pretend(action, knowledge, intentions, hand, board):
                 score += 1
         else:
             predictions.append(None)
+            score += 0.01
+            pos = True
+        index += 1
     if not pos:
         return False, score, predictions
     return True,score, predictions
@@ -122,6 +131,7 @@ def pretend(action, knowledge, intentions, hand, board):
     
 def pretend_discard(act, knowledge, board, trash):
     which = copy.deepcopy(knowledge[act.cnr])
+    lims = limits(trash)
     for (col,num) in trash:
         if which[col][num-1]:
             which[col][num-1] -= 1
@@ -137,7 +147,7 @@ def pretend_discard(act, knowledge, board, trash):
             rank = i+1
             if cnt > 0:
                 prob = cnt*1.0/possibilities
-                if board[col][1] >= rank:
+                if board[col][1] >= rank or rank >= lims[col]:
                     expected += prob*HINT_VALUE
                     terms.append((col,rank,cnt,prob,prob*HINT_VALUE))
                 else:
@@ -169,7 +179,7 @@ class SelfIntentionalPlayer(Player):
         self.last_board = []
         self.explanation = []
         self.alternative_action = None
-    def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints):
+    def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints, hits):
         handsize = len(knowledge[0])
         possible = []
         result = None
@@ -241,7 +251,7 @@ class SelfIntentionalPlayer(Player):
             for c in ALL_COLORS:
                 action = (HINT_COLOR, c)
                 #print "HINT", COLORNAMES[c],
-                (isvalid,score,expl) = pretend(action, knowledge[1-nr], intentions, hands[1-nr], board)
+                (isvalid,score,expl) = pretend(action, knowledge[1-nr], intentions, hands[1-nr], board, hits)
                 self.explanation.append(["Prediction for: Hint Color " + COLORNAMES[c]] + map(format_intention, expl))
                 #print isvalid, score
                 if isvalid:
@@ -252,7 +262,7 @@ class SelfIntentionalPlayer(Player):
                 action = (HINT_NUMBER, r)
                 #print "HINT", r,
                 
-                (isvalid,score, expl) = pretend(action, knowledge[1-nr], intentions, hands[1-nr], board)
+                (isvalid,score, expl) = pretend(action, knowledge[1-nr], intentions, hands[1-nr], board, hits)
                 self.explanation.append(["Prediction for: Hint Rank " + str(r)] + map(format_intention, expl))
                 #print isvalid, score
                 if isvalid:
@@ -300,7 +310,7 @@ class SelfIntentionalPlayer(Player):
 def TimingProb(name, pnr):
     return ProbablyIntentionalPlayer(name, pnr, True)
     
-RECORD_TIMES = 5
+RECORD_TIMES = 10
 MAJOR_LOW = 1.4
 MINOR_LOW = 1.2
 MINOR_HIGH = 0.8
@@ -319,9 +329,9 @@ class ProbablyIntentionalPlayer(Player):
         self.explanation = []
         self.sub = SelfIntentionalPlayer(name, pnr)
         self.use_timing = use_timing
-        self.timing = [1 for i in range(RECORD_TIMES)]
+        self.timing = [5 for i in range(RECORD_TIMES)]
         self.last_time = time.time()
-    def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints):
+    def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints, hits):
         self.explanation = []
         self.alternative_action = None
         delta = time.time() - self.last_time 
@@ -357,10 +367,8 @@ class ProbablyIntentionalPlayer(Player):
             (act,plr) = self.gothint
             self.gothint = None
             (iact,force,expl) = interpret_hint(self.last_knowledge[nr], knowledge[nr], played, trash, hands[1-nr], act, board, quality, self.use_timing)
-            altact = None
-            if self.use_timing:
-                (altact,_,e) = interpret_hint(self.last_knowledge[nr], knowledge[nr], played, trash, hands[1-nr], act, board, 1, False)
-            subact = self.sub.get_action(nr, hands, knowledge, trash, played, board, valid_actions, hints)
+            (altact,_,e) = interpret_hint(self.last_knowledge[nr], knowledge[nr], played, trash, hands[1-nr], act, board, quality, not self.use_timing)
+            #subact = self.sub.get_action(nr, hands, knowledge, trash, played, board, valid_actions, hints)
             self.explanation.extend(expl)
             #if subact.type == iact.type and iact.type == PLAY and iact.cnr != subact.cnr:
             #    print ">>>>> diff"
@@ -422,7 +430,7 @@ class ProbablyIntentionalPlayer(Player):
             for c in ALL_COLORS:
                 action = (HINT_COLOR, c)
                 #print "HINT", COLORNAMES[c],
-                (isvalid,score,expl) = pretend(action, knowledge[1-nr], intentions, hands[1-nr], board)
+                (isvalid,score,expl) = pretend(action, knowledge[1-nr], intentions, hands[1-nr], board, hits)
                 self.explanation.append(["Prediction for: Hint Color " + COLORNAMES[c]] + map(format_intention, expl))
                 #print isvalid, score
                 if isvalid:
@@ -433,7 +441,7 @@ class ProbablyIntentionalPlayer(Player):
                 action = (HINT_NUMBER, r)
                 #print "HINT", r,
                 
-                (isvalid,score, expl) = pretend(action, knowledge[1-nr], intentions, hands[1-nr], board)
+                (isvalid,score, expl) = pretend(action, knowledge[1-nr], intentions, hands[1-nr], board, hits)
                 self.explanation.append(["Prediction for: Hint Rank " + str(r)] + map(format_intention, expl))
                 #print isvalid, score
                 if isvalid:
@@ -443,10 +451,11 @@ class ProbablyIntentionalPlayer(Player):
                 valid.sort(key=lambda (a,s): -s)
                 #print valid
                 (a,s) = valid[0]
-                if a[0] == HINT_COLOR:
-                    result = Action(HINT_COLOR, pnr=1-nr, col=a[1])
-                else:
-                    result = Action(HINT_NUMBER, pnr=1-nr, num=a[1])
+                if s >= 1 or hints > 6:
+                    if a[0] == HINT_COLOR:
+                        result = Action(HINT_COLOR, pnr=1-nr, col=a[1])
+                    else:
+                        result = Action(HINT_NUMBER, pnr=1-nr, num=a[1])
 
         self.explanation.append(["My Knowledge"] + map(format_knowledge, knowledge[nr]))
         possible = [ Action(DISCARD, cnr=i) for i in xrange(handsize) ]
@@ -665,7 +674,7 @@ class Game(object):
                     hands.append([])
                 else:
                     hands.append(h)
-            action = self.players[self.current_player].get_action(self.current_player, hands, self.knowledge, self.trash, self.played, self.board, self.valid_actions(), self.hints)
+            action = self.players[self.current_player].get_action(self.current_player, hands, self.knowledge, self.trash, self.played, self.board, self.valid_actions(), self.hints, 3-self.hits)
             self.perform(action, self.players[self.current_player].alternative_action)
             self.current_player += 1
             self.current_player %= len(self.players)
@@ -685,7 +694,7 @@ class Game(object):
                     hands.append([])
                 else:
                     hands.append(h)
-            action = self.players[self.current_player].get_action(self.current_player, hands, self.knowledge, self.trash, self.played, self.board, self.valid_actions(), self.hints)
+            action = self.players[self.current_player].get_action(self.current_player, hands, self.knowledge, self.trash, self.played, self.board, self.valid_actions(), self.hints, 3-self.hits)
             self.perform(action, self.players[self.current_player].alternative_action)
             self.current_player += 1
             self.current_player %= len(self.players)
