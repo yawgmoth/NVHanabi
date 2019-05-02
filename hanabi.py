@@ -470,9 +470,9 @@ class ProbablyIntentionalPlayer(Player):
         self.last_time = time.time()
         if result:
             return result
-        if iact:
-            self.alternative_action = altact
-            return iact
+        #if iact:
+        #    self.alternative_action = altact
+        #    return iact
         return scores[0][0]
         
         return random.choice([Action(DISCARD, cnr=i) for i in xrange(handsize)])

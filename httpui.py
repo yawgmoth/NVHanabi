@@ -22,7 +22,7 @@ TRASH = 1
 BOARD = 2
 TRASHP = 3
 
-debug = False
+debug = True
 
 
 errlog = sys.stdout
@@ -448,6 +448,7 @@ class ReplayHTTPPlayer(HTTPPlayer):
     def __init__(self, name, pnr):
         super(ReplayHTTPPlayer, self).__init__(name,pnr)
         self.actions = []
+        self.alternative_action = None
     def get_action(self, nr, hands, knowledge, trash, played, board, valid_actions, hints, hits):
         return self.actions.pop(0)
             
@@ -859,7 +860,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             
             s.wfile.write("</body></html>")
             return
-        elif path.startswith("/selectreplay/") and debu:
+        elif path.startswith("/selectreplay/") and debug:
             filters = path[14:].split("/")
             filters = dict(zip(filters[::2], filters[1::2]))
             s.wfile.write("<html><head><title>Hanabi</title></head>\n")
@@ -949,10 +950,10 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             s.wfile.write("<html><head><title>Hanabi</title></head>\n")
             s.wfile.write('<body><h1>Take over game</h1>\n')
             s.wfile.write('<p>If you continue, you will take over playing the game you were viewing from turn %d onward</p>'%round)
-            s.wfile.write('<p>You may choose to use the same AI as the player that was playing the game by clicking <a href="/starttakeover/%s/%d/%s/%s/%s">here</a></p>\n'%(gid,round+1,ai,action,arg))
+            s.wfile.write('<p>You may choose to use the same AI as the player that was playing the game by clicking <a href="/starttakeover/%s/%d/%s/%s/%s">here</a></p>\n'%(gid,round,ai,action,arg))
             s.wfile.write('<p>You may also choose any AI to play with:</p><ul>')
             for a in ais:
-                s.wfile.write('<li><a href="/starttakeover/%s/%d/%s/%s/%s">%s AI</a></li>'%(gid,round+1,a,action,arg,a.capitalize()))
+                s.wfile.write('<li><a href="/starttakeover/%s/%d/%s/%s/%s">%s AI</a></li>'%(gid,round,a,action,arg,a.capitalize()))
                 
             s.wfile.write("</ul></p></body></html>")
             return
