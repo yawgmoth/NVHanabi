@@ -337,15 +337,21 @@ class ProbablyIntentionalPlayer(Player):
         delta = time.time() - self.last_time 
         avg = numpy.mean(self.timing)
         stddev = numpy.std(self.timing)
+        timingcomment = "normal"
         quality = 1
         if delta < avg - 2*stddev:
             quality = MAJOR_LOW
+            timingcomment = "very low"
         elif delta < avg - stddev:
             quality = MINOR_LOW
+            timingcomment = "low"
+            
         elif delta > avg + 2*stddev:
             quality = MAJOR_HIGH
+            timingcomment = "very high"
         elif delta > avg + stddev:
             quality = MINOR_HIGH
+            timingcomment = "high"
         self.explanation.append(["Last times"] + map(str, self.timing))
         self.explanation.append(["current time, thresholds"] + map(str, [delta, avg - 2*stddev, avg - stddev, avg + stddev, avg + 2*stddev]))
         self.timing.append(delta)
@@ -376,6 +382,7 @@ class ProbablyIntentionalPlayer(Player):
             if force:
                 self.last_time = time.time()
                 self.alternative_action = altact
+                iact.timing = timingcomment
                 return iact
 
 
@@ -469,10 +476,12 @@ class ProbablyIntentionalPlayer(Player):
         self.last_knowledge = copy.deepcopy(knowledge)
         self.last_time = time.time()
         if result:
+            result.timing = timingcomment + " other"
             return result
         #if iact:
         #    self.alternative_action = altact
         #    return iact
+        scores[0][0].timing = timingcomment + " other"
         return scores[0][0]
         
         return random.choice([Action(DISCARD, cnr=i) for i in xrange(handsize)])
@@ -504,9 +513,9 @@ def compare_actions(act1, act2, act1s, act2s):
             return "SAME"
      
         if act1.type == PLAY:
-            return "BETTER"
+            return "BETTER Play"
         if act2.type == PLAY:
-            return "WORSE"
+            return "WORSE Play"
         
         if act1.type == DISCARD:
             return "BETTER Discard"
@@ -537,10 +546,14 @@ class Game(object):
         self.format = format
         self.dopostsurvey = False
         self.study = False
+        self.ping = time.time()
+        self.start = time.time()
         if self.format:
             print >> self.log, self.deck
             for i,h in enumerate(self.hands):
                 print>> self.log, "PLAYER", i, h
+            print >>self.log, "START:", self.start
+        self.player_turns = [(0,0) for p in players]
     def make_hands(self):
         handsize = 4
         if len(self.players) < 4:
@@ -572,9 +585,16 @@ class Game(object):
         for p in self.players:
             p.inform(action, self.current_player, self)
         
-            
+         
         if format:
             print >> self.log, "MOVE:", self.current_player, action.type, action.cnr, action.pnr, action.col, action.num
+            duration = time.time()-self.ping
+            print >> self.log, "TIME NEEDED:", self.current_player, duration
+            (turns,ttime) = self.player_turns[self.current_player]    
+            self.player_turns[self.current_player] = (turns+1, ttime+duration)
+            if action.timing:
+                print >> self.log, "TIME COMPARISON:", action.timing
+            self.ping = time.time()
             if action.comment:
                 print >>self.log, action.comment.replace("$player", str(self.current_player))
         if altact and altact != action:
@@ -714,6 +734,10 @@ class Game(object):
         return True
     def finish(self):
         if self.format:
+            print >> self.log, "END:", time.time()
+            duration = time.time() - self.start
+            print >> self.log, "DURATION:", duration
+            print >> self.log, "AVERAGE TURN TIMES:", map(lambda (turns,time): time/turns, self.player_turns)            
             print >> self.log, "Score", self.score()
             self.log.close()
         

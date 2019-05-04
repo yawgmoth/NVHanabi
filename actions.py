@@ -19,6 +19,7 @@ class Action(object):
         self.num = num
         self.cnr = cnr
         self.comment = comment
+        self.timing = ""
     def __str__(self):
         if self.type == HINT_COLOR:
             return "hints " + str(self.pnr) + " about all their " + COLORNAMES[self.col] + " cards"

@@ -195,12 +195,11 @@ def matches_hint((col,rank), hint):
 def interpret_hint(old_knowledge, knowledge, played, trash, other_hands, hint, board, quality, use_timing=False):
     explanation = []
     delta = invert(difference(knowledge, old_knowledge))
-    
-    newknowledge = update_knowledge(knowledge, board + trash + other_hands)
+    newknowledge = update_knowledge(knowledge, played + trash + other_hands)
     explanation.append(["Updated knowledge"] +  map(format_probs, newknowledge))
     explanation.append(["Updated normalized knowledge"] +  map(format_probs, knormalize(newknowledge)))
     
-    newknowledge_discard = update_knowledge(knowledge, board + trash + other_hands)
+    newknowledge_discard = update_knowledge(knowledge, played + trash + other_hands)
     hasplayable = False
     update = []
     factor = 2.0

@@ -22,7 +22,7 @@ TRASH = 1
 BOARD = 2
 TRASHP = 3
 
-debug = True
+debug = False
 
 
 errlog = sys.stdout
@@ -1083,6 +1083,24 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         if "exp" in answers:
             default = map(lambda (a,b): a, responses).index(answers["exp"])
         s.add_choice("exp", "How familiar are you with the card game Hanabi?", responses, default)
+        
+        responses = [("never", "I have never played before or can't remember when I played the last time"),
+                             ("long", "The last time I played has been a long time (over a year) ago"),
+                             ("medium", "The last time I played has been some time (between 3 months and a year) ago"),
+                             ("recent", "The last time I played was recent (up to 3 months ago)")]
+        default = -1
+        if "recent" in answers:
+            default = map(lambda (a,b): a, responses).index(answers["recent"])
+        s.add_choice("recent", "When was the last time that you played Hanabi before this experiment?", responses, default)
+
+        responses = [("never", "I never reach the top score, or I have never played Hanabi"),
+                               ("few", "I almost never reach the top score (about one in 50 or more games)"),
+                               ("sometimes", "I sometimes reach the top score (about one in 6-20 games)"),
+                               ("often", "I often reach the top score (about one in 5 or fewer games)")]
+        default = -1
+        if "score" in answers:
+            default = map(lambda (a,b): a, responses).index(answers["score"])
+        s.add_choice("score", "How often do you typically reach the top score of 25 in Hanabi?", responses, default)
 
         responses = [("yes", "Yes"), ("no", "No")]
         default = 0
