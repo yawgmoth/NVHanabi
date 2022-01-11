@@ -1,6 +1,7 @@
+consent = """<center><h1>Hanabi</h1>
+Note: The experiment has concluded, but you are free to keep playing Hanabi with our agents. The game logs, without your identifying information, will be stored and may be used for future research"""
 
-
-consent = """<center><table width="800px"><tr><td>
+consent1 = """<center><table width="800px"><tr><td>
 <font size="16"><b>University of Costa Rica<br/> </font>
 INFORMED CONSENT FORM for RESEARCH<br/></b>
 <b>Title of Study:</b> Hanabi AI Agents<br/>

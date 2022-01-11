@@ -22,7 +22,7 @@ TRASH = 1
 BOARD = 2
 TRASHP = 3
 
-debug = False
+debug = True 
 
 
 errlog = sys.stdout
@@ -134,7 +134,7 @@ def format_action((i,(action,pnr,card)), gid, replay=None):
             if replay:
                 (gid,round,info) = replay
                 explainlink =  '<a href="/replay/%s/%d/explain" target="_blank">(Explain)</a>'%(gid, round)
-            else:
+            elif False:
                 explainlink =  '<a href="/gid%s/explain" target="_blank">(Explain)</a>'%gid
         
         return "<b>" + result + '</b>%s<br/><br/>'%explainlink
@@ -514,9 +514,9 @@ def format_score(sc):
     
                 
 # AIClasses
-ais = {"random": hanabi.Player, "full": hanabi.SelfIntentionalPlayer, "prob": hanabi.ProbablyIntentionalPlayer, "timing": hanabi.TimingProb}
+ais = {"random": hanabi.Player, "full": hanabi.SelfIntentionalPlayer, "prob": hanabi.ProbablyIntentionalPlayer, "timing": hanabi.TimingProb, "sidechannel": hanabi.TimedPlayer}
 
-ai_names = {"random": "Random", "prob": "Probabilistic Player", "timing": "Probabilistic Player with Timing", "full": "Fully Intentional Player"}
+ai_names = {"random": "Random", "prob": "Probabilistic Player", "timing": "Probabilistic Player with Timing", "full": "Fully Intentional Player", "sidechannel": "Sidechannel player (5s slices)"}
 
 class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     def do_HEAD(s):
@@ -549,6 +549,8 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         turn = None
         gid = None
         path = s.path
+        if s.path.startswith("/?fbclid="):
+            s.path = "/"
         if s.path.startswith("/gid"):
             gid = s.path[4:20]
             gameslock.acquire()
@@ -1292,7 +1294,7 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         s.wfile.write("<html><head><title>Hanabi</title></head>\n")
         s.wfile.write('<body>\n')
         s.wfile.write(consent.consent)
-        s.wfile.write('<center><font size="12"><a href="/tutorial">By clicking here I agree to participate in the study</a></font></center><br/><br/><br/>')
+        s.wfile.write('<center><font size="12"><a href="/tutorial">By clicking here I agree to have my game logs recorded</a></font></center><br/><br/><br/>')
         s.wfile.write("</body></html>")
  
 class ThreadingHTTPServer(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
