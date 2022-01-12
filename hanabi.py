@@ -308,7 +308,7 @@ class SelfIntentionalPlayer(Player):
             self.played = game.played[:]
 
 
-TIMESCALE = 50*1000.0 # ms
+TIMESCALE = 50 # seconds
 SLICETIME = TIMESCALE / 10.0
 APPROXTIME = SLICETIME/8.0
 
